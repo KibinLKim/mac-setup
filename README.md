@@ -49,8 +49,9 @@ chmod +x mac-setup.sh
 3. Docker: 앱 실행 → 권한 허용 → 초기 설정
 4. Rectangle: 앱 실행 → 접근성 권한 허용
 5. GitHub CLI: `gh auth login`
-6. Claude Code: `claude` 실행 → 로그인
-7. Warp: 테마, IDE 설정
+6. Git 설정: `git config --global user.name "이름"` / `git config --global user.email "이메일"`
+7. Claude Code: `claude` 실행 → 로그인
+8. Warp: 테마, IDE 설정
 
 ## 참고
 

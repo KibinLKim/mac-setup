@@ -248,6 +248,7 @@ print_footer() {
     echo "• Docker: 앱 실행 → 권한 허용 → 초기 설정"
     echo "• Rectangle: 앱 실행 → 접근성 권한 허용"
     echo "• GitHub CLI: gh auth login"
+    echo "• Git 설정: git config --global user.name/email"
     echo "• Claude Code: claude 실행 → 로그인"
     echo "• Warp: 테마, IDE 설정"
     echo "══════════════════════════════════════════"

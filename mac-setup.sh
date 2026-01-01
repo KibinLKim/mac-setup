@@ -24,6 +24,7 @@ VSCODE_EXTENSIONS=(
     eamodio.gitlens
     redhat.vscode-yaml
     ms-vscode-remote.remote-ssh
+    haack.warp-companion
 )
 
 # 헤더 출력

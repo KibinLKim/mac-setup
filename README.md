@@ -26,6 +26,7 @@ macOS default development environment setup script
 - ESLint, Prettier
 - Docker, Kubernetes
 - GitLens, YAML, Remote SSH
+- Warp Companion (Warp 테마 동기화)
 
 ### 기타
 - Claude Code

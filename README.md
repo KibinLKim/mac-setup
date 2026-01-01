@@ -45,8 +45,12 @@ chmod +x mac-setup.sh
 ## 설치 후
 
 1. 터미널 재시작
-2. VS Code에서 `Cmd+Shift+P` → `Shell Command: Install 'code' command in PATH` 실행
-3. Docker Desktop 실행
+2. VS Code: `Cmd+Shift+P` → `Shell Command: Install 'code' command in PATH`
+3. Docker: 앱 실행 → 권한 허용 → 초기 설정
+4. Rectangle: 앱 실행 → 접근성 권한 허용
+5. GitHub CLI: `gh auth login`
+6. Claude Code: `claude` 실행 → 로그인
+7. Warp: 테마, IDE 설정
 
 ## 참고
 

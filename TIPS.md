@@ -22,8 +22,6 @@
 
 ## fzf 단축키
 - `Ctrl + R` - 히스토리 퍼지 검색
-- `Ctrl + T` - 파일 퍼지 검색
-- `Alt + C` - 디렉토리 퍼지 검색
 
 ## ripgrep (rg)
 ```bash

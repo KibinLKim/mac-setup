@@ -78,6 +78,8 @@ cleanup() {
 }
 
 setup_sudo() {
+    echo ""
+    echo "🔐 sudo 권한이 필요합니다"
     sudo -v || exit 1
     echo "$(id -un) ALL=(ALL) NOPASSWD: ALL" | sudo tee "$SUDOERS_FILE" >/dev/null
     sudo chmod 440 "$SUDOERS_FILE"
@@ -171,7 +173,7 @@ install_homebrew() {
         NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" &>/dev/null
         grep -q 'brew shellenv' ~/.zprofile 2>/dev/null || \
             echo "eval \"\$(${HOMEBREW_PREFIX}/bin/brew shellenv)\"" >> ~/.zprofile
-        eval "$("${HOMEBREW_PREFIX}/bin/brew" shellenv)"
+        export PATH="${HOMEBREW_PREFIX}/bin:${HOMEBREW_PREFIX}/sbin:$PATH"
         echo " 완료"
     fi
 
@@ -307,7 +309,6 @@ EOF
 
 print_footer() {
     echo ""
-    echo "══════════════════════════════════════════"
 
     if [[ ${#FAILED_ITEMS[@]} -gt 0 ]]; then
         echo "⚠️  설치 실패 항목:"
@@ -317,6 +318,7 @@ print_footer() {
 
     cat << 'EOF'
 ✅ 완료!
+══════════════════════════════════════════
 
 📋 설치 후 필요한 작업:
 ──────────────────────────────────────────
@@ -326,6 +328,8 @@ print_footer() {
 • Git 설정: git config --global user.name/email
 • Claude Code: claude 실행 → 로그인
 • Warp: 테마, IDE 설정
+
+⚠️  터미널을 종료 후 재시작하세요!
 ══════════════════════════════════════════
 EOF
 }
@@ -345,7 +349,6 @@ main() {
     setup_shell
     print_footer
     cleanup
-    exec zsh -l
 }
 
 main

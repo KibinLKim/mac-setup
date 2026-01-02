@@ -63,4 +63,4 @@ cd mac-setup
 5. Claude Code: `claude` 실행 → 로그인
 6. Warp: 테마, IDE 설정
 
-> 터미널 재시작과 VS Code `code` 명령어는 자동 설정됩니다.
+> 스크립트 완료 후 터미널을 종료하고 재시작하세요. VS Code `code` 명령어는 자동 설정됩니다.

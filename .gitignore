@@ -1,3 +1,7 @@
 # 로그 파일
 *.log
 *.err
+
+# Claude Code 로컬 설정
+.claude/*.local.json
+CLAUDE.local.md

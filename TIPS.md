@@ -60,11 +60,6 @@ git config --global user.email "이메일"
 eval "$(/opt/homebrew/bin/brew shellenv)"
 ```
 
-### 스크립트 실행 중 비밀번호 반복 입력
-- sudo 세션이 만료된 경우 발생
-- 스크립트가 15초마다 자동 갱신하지만, 긴 다운로드 중 만료될 수 있음
-- 비밀번호 입력 후 계속 진행하면 됨
-
 ### 설치 실패 항목 재설치
 ```bash
 # 개별 재설치

@@ -6,11 +6,16 @@
 
 set -euo pipefail
 
-# ===== 설정 =====
+# ===== 상수 =====
+
 readonly TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 readonly LOG_FILE="./mac-setup-${TIMESTAMP}.log"
 readonly ERR_FILE="./mac-setup-${TIMESTAMP}.err"
 readonly HOMEBREW_PREFIX=$([[ $(uname -m) == "arm64" ]] && echo "/opt/homebrew" || echo "/usr/local")
+readonly SUDOERS_FILE="/etc/sudoers.d/mac-setup-nopasswd"
+readonly WARP_DMG_URL="https://app.warp.dev/download?package=dmg"
+
+# ===== 설치 목록 =====
 
 CLI_TOOLS=(git gh eza bat ripgrep fzf jq yq lazygit node pnpm uv httpie tldr watch)
 
@@ -37,15 +42,15 @@ VSCODE_EXTENSIONS=(
     haack.warp-companion
 )
 
-# 런타임 변수
-SUDO_PID=""
+# ===== 런타임 변수 =====
+
 TEE_LOG_PID=""
 TEE_ERR_PID=""
 LOG_FIFO=""
 ERR_FIFO=""
 FAILED_ITEMS=()
 
-# ===== 유틸리티 함수 =====
+# ===== 시스템 유틸리티 =====
 
 setup_logging() {
     LOG_FIFO="/tmp/mac-setup-log-$$"
@@ -62,36 +67,34 @@ setup_logging() {
 }
 
 cleanup() {
-    # sudo 갱신 프로세스 종료
-    [[ -n "$SUDO_PID" ]] && kill "$SUDO_PID" 2>/dev/null && wait "$SUDO_PID" 2>/dev/null
-    # stdout/stderr 복원
-    exec 1>&3 2>&4 3>&- 4>&- 2>/dev/null || true
-    # tee 프로세스 대기
-    [[ -n "$TEE_LOG_PID" ]] && wait "$TEE_LOG_PID" 2>/dev/null
-    [[ -n "$TEE_ERR_PID" ]] && wait "$TEE_ERR_PID" 2>/dev/null
-    # FIFO 정리
+    [[ -f "$SUDOERS_FILE" ]] && sudo rm -f "$SUDOERS_FILE" 2>/dev/null
+    exec 1>&3 2>&4 2>/dev/null || true
+    exec 3>&- 4>&- 2>/dev/null || true
+    sleep 0.5
+    [[ -n "$TEE_LOG_PID" ]] && kill "$TEE_LOG_PID" 2>/dev/null
+    [[ -n "$TEE_ERR_PID" ]] && kill "$TEE_ERR_PID" 2>/dev/null
     rm -f "$LOG_FIFO" "$ERR_FIFO" 2>/dev/null
+    [[ -f "$ERR_FILE" && ! -s "$ERR_FILE" ]] && rm -f "$ERR_FILE"
 }
 
-refresh_sudo() { sudo -v 2>/dev/null; }
-
 setup_sudo() {
-    echo "🔐 관리자 권한이 필요합니다..."
-    sudo -v || { echo "  ✗ sudo 권한 획득 실패"; exit 1; }
-    (while kill -0 "$$" 2>/dev/null; do sudo -n true; sleep 15; done) &
-    SUDO_PID=$!
+    sudo -v || exit 1
+    echo "$(id -un) ALL=(ALL) NOPASSWD: ALL" | sudo tee "$SUDOERS_FILE" >/dev/null
+    sudo chmod 440 "$SUDOERS_FILE"
     trap cleanup EXIT
 }
 
-print_section() {
-    echo "$1"
-    echo "──────────────────────────────────────────"
-}
+# ===== 출력 유틸리티 =====
 
-# 진행률 표시와 함께 배열 항목 처리
+print_section() { echo -e "\n$1\n──────────────────────────────────────────"; }
+print_ok()      { echo "  ✓ $1"; }
+print_skip()    { echo "  ✓ $1 (이미 설치됨)"; }
+print_warn()    { echo "  ⚠ $1"; }
+
+# 배열 항목을 진행률과 함께 처리 (bash 3.2 호환)
 run_with_progress() {
-    local -n items=$1
-    local callback=$2
+    local arr_name=$1 callback=$2
+    eval "local items=(\"\${${arr_name}[@]}\")"
     local total=${#items[@]} i=0
 
     for item in "${items[@]}"; do
@@ -101,53 +104,54 @@ run_with_progress() {
     done
 }
 
-# brew 패키지 설치
+# ===== 설치 헬퍼 =====
+
 brew_install() {
     local type=$1 name=$2 pkg=$3
-    [[ "$type" == "cask" ]] && refresh_sudo
-
     if brew list --$type "$pkg" &>/dev/null; then
         echo "✓ $name (이미 설치됨)"
-    elif brew install --$type "$pkg" &>/dev/null; then
-        echo "✓ $name"
     else
-        echo "✗ $name (설치 실패)"
-        FAILED_ITEMS+=("$name")
+        echo -n "⏳ $name 설치 중..."
+        if brew install --$type "$pkg" &>/dev/null; then
+            echo " 완료"
+        else
+            echo " 실패"
+            FAILED_ITEMS+=("$name")
+        fi
     fi
 }
 
-# DMG 앱 설치
 install_dmg_app() {
     local name=$1 url=$2 app_name=${3:-$1}
-    local dmg_path="/tmp/${name,,}.dmg"
+    local dmg_path="/tmp/$(echo "$name" | tr '[:upper:]' '[:lower:]').dmg"
 
     if [[ -d "/Applications/${app_name}.app" ]]; then
-        echo "  ✓ $name (이미 설치됨)"
+        print_skip "$name"
         return 0
     fi
 
+    echo -n "  ⏳ $name 다운로드 중..."
     if ! curl -fsSL "$url" -o "$dmg_path"; then
-        echo "  ✗ $name (다운로드 실패)"
+        echo " 실패"
         FAILED_ITEMS+=("$name")
         return 1
     fi
+    echo -n " 설치 중..."
 
-    local mount_output
+    local mount_output mount_point
     if ! mount_output=$(hdiutil attach "$dmg_path" -nobrowse 2>&1); then
-        echo "  ✗ $name (마운트 실패)"
+        echo " 실패 (마운트)"
         FAILED_ITEMS+=("$name")
         rm -f "$dmg_path"
         return 1
     fi
-
-    local mount_point
     mount_point=$(echo "$mount_output" | grep -o '/Volumes/[^"]*' | head -1)
 
     if [[ -d "${mount_point}/${app_name}.app" ]]; then
         cp -R "${mount_point}/${app_name}.app" /Applications/
-        echo "  ✓ $name"
+        echo " 완료"
     else
-        echo "  ✗ $name (앱을 찾을 수 없음)"
+        echo " 실패 (앱 없음)"
         FAILED_ITEMS+=("$name")
     fi
 
@@ -158,78 +162,79 @@ install_dmg_app() {
 # ===== 설치 함수 =====
 
 install_homebrew() {
-    echo "🍺 Homebrew 설치 확인..."
-    if ! command -v brew &>/dev/null; then
-        NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" &>/dev/null
-        if ! grep -q 'brew shellenv' ~/.zprofile 2>/dev/null; then
-            echo "eval \"\$(${HOMEBREW_PREFIX}/bin/brew shellenv)\"" >> ~/.zprofile
-        fi
-        eval "$("${HOMEBREW_PREFIX}/bin/brew" shellenv)"
-        echo "  ✓ Homebrew 설치 완료"
+    print_section "🍺 Homebrew"
+
+    if command -v brew &>/dev/null; then
+        print_skip "Homebrew"
     else
-        echo "  ✓ Homebrew (이미 설치됨)"
+        echo -n "  ⏳ Homebrew 설치 중..."
+        NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" &>/dev/null
+        grep -q 'brew shellenv' ~/.zprofile 2>/dev/null || \
+            echo "eval \"\$(${HOMEBREW_PREFIX}/bin/brew shellenv)\"" >> ~/.zprofile
+        eval "$("${HOMEBREW_PREFIX}/bin/brew" shellenv)"
+        echo " 완료"
     fi
-    echo "  ↻ Homebrew 업데이트 중..."
+
+    echo -n "  ↻ 업데이트 중..."
     brew update &>/dev/null
-    echo ""
+    echo " 완료"
 }
 
 install_cli_tools() {
-    print_section "📦 CLI 도구 설치..."
+    print_section "📦 CLI 도구"
+
     _install_cli() { brew_install formula "$1" "$1"; }
     run_with_progress CLI_TOOLS _install_cli
-    echo ""
 }
 
 install_warp() {
-    print_section "🚀 Warp 설치..."
-    install_dmg_app "Warp" "https://app.warp.dev/download?package=dmg"
-    echo ""
+    print_section "🚀 Warp"
+    install_dmg_app "Warp" "$WARP_DMG_URL"
 }
 
 install_cask_apps() {
-    print_section "📦 Cask 앱 설치..."
+    print_section "📦 Cask 앱"
+
     _install_cask() {
         local name="${1%%:*}" pkg="${1##*:}"
         brew_install cask "$name" "$pkg"
     }
     run_with_progress CASK_APPS _install_cask
-    echo ""
 }
 
 install_python() {
-    print_section "🐍 Python 설치..."
+    print_section "🐍 Python"
+
     if uv python install &>/dev/null; then
-        echo "  ✓ Python (최신 버전)"
+        print_ok "Python (최신 버전)"
     else
-        echo "  ✓ Python (이미 설치됨)"
+        print_skip "Python"
     fi
+
     if uv tool install ruff &>/dev/null; then
-        echo "  ✓ ruff (uv)"
+        print_ok "ruff (uv)"
     else
-        echo "  ✓ ruff (uv, 이미 설치됨)"
+        print_skip "ruff"
     fi
-    echo ""
 }
 
 install_vscode_extensions() {
-    print_section "🔌 VS Code 확장 프로그램 설치..."
+    print_section "🔌 VS Code 확장"
+
     local vscode="/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code"
 
     if [[ ! -f "$vscode" ]]; then
-        echo "  ⚠ VS Code가 설치되지 않음 (건너뜀)"
-        echo ""
+        print_warn "VS Code 미설치 (건너뜀)"
         return
     fi
 
-    # code 명령어 설정
-    refresh_sudo
+    # code 명령어 심볼릭 링크
     if [[ ! -L /usr/local/bin/code ]]; then
         sudo mkdir -p /usr/local/bin
         sudo ln -sf "$vscode" /usr/local/bin/code
-        echo "  ✓ code 명령어 설정"
+        print_ok "code 명령어 설정"
     else
-        echo "  ✓ code 명령어 (이미 설정됨)"
+        print_skip "code 명령어"
     fi
 
     # 확장 설치
@@ -237,36 +242,38 @@ install_vscode_extensions() {
     installed=$("$vscode" --list-extensions 2>/dev/null | tr '[:upper:]' '[:lower:]')
 
     _install_ext() {
-        local ext=$1 ext_lower=${1,,}
+        local ext=$1 ext_lower
+        ext_lower=$(echo "$ext" | tr '[:upper:]' '[:lower:]')
         if echo "$installed" | grep -q "^${ext_lower}$"; then
             echo "✓ $ext (이미 설치됨)"
         elif "$vscode" --install-extension "$ext" &>/dev/null; then
             echo "✓ $ext"
         else
-            echo "✗ $ext (설치 실패)"
+            echo "✗ $ext"
             FAILED_ITEMS+=("VS Code: $ext")
         fi
     }
     run_with_progress VSCODE_EXTENSIONS _install_ext
-    echo ""
 }
 
 setup_shell() {
-    print_section "⚙️  쉘 설정..."
+    print_section "⚙️  쉘 설정"
 
     # fzf 키바인딩
     local fzf_install="${HOMEBREW_PREFIX}/opt/fzf/install"
     if grep -q "fzf" ~/.zshrc 2>/dev/null; then
-        echo "  ✓ fzf 키바인딩 (이미 설정됨)"
+        print_skip "fzf 키바인딩"
     elif [[ -f "$fzf_install" ]]; then
         "$fzf_install" --all &>/dev/null
-        echo "  ✓ fzf 키바인딩"
+        print_ok "fzf 키바인딩"
     else
-        echo "  ⚠ fzf 미설치 (건너뜀)"
+        print_warn "fzf 미설치 (건너뜀)"
     fi
 
     # alias 설정
-    if ! grep -q "# Custom alias" ~/.zshrc 2>/dev/null; then
+    if grep -q "# Custom alias" ~/.zshrc 2>/dev/null; then
+        print_skip "alias"
+    else
         cat >> ~/.zshrc << 'EOF'
 
 # Claude Code CLI (native 설치)
@@ -281,28 +288,29 @@ alias npm="pnpm"
 alias c="clear"
 alias h="history"
 EOF
-        echo "  ✓ alias 추가됨"
-    else
-        echo "  ✓ alias (이미 설정됨)"
+        print_ok "alias 추가됨"
     fi
-    echo ""
 }
 
+# ===== UI =====
+
 print_header() {
-    echo ""
-    echo "══════════════════════════════════════════"
-    echo "  🚀 Mac 개발 환경 설정 스크립트"
-    echo "══════════════════════════════════════════"
-    echo "📝 로그: $LOG_FILE"
-    echo "📝 에러: $ERR_FILE"
-    echo ""
+    cat << EOF
+
+══════════════════════════════════════════
+  🚀 Mac 개발 환경 설정 스크립트
+══════════════════════════════════════════
+📝 로그: $LOG_FILE
+📝 에러: $ERR_FILE
+EOF
 }
 
 print_footer() {
+    echo ""
     echo "══════════════════════════════════════════"
 
     if [[ ${#FAILED_ITEMS[@]} -gt 0 ]]; then
-        echo "⚠️  일부 항목 설치 실패:"
+        echo "⚠️  설치 실패 항목:"
         printf "  • %s\n" "${FAILED_ITEMS[@]}"
         echo ""
     fi
@@ -312,7 +320,6 @@ print_footer() {
 
 📋 설치 후 필요한 작업:
 ──────────────────────────────────────────
-• VS Code: code 명령어 사용 가능
 • Docker: 앱 실행 → 권한 허용 → 초기 설정
 • Rectangle: 앱 실행 → 접근성 권한 허용
 • GitHub CLI: gh auth login
@@ -326,6 +333,7 @@ EOF
 # ===== 메인 =====
 
 main() {
+    setup_logging
     print_header
     setup_sudo
     install_homebrew
@@ -336,13 +344,8 @@ main() {
     install_vscode_extensions
     setup_shell
     print_footer
+    cleanup
+    exec zsh -l
 }
 
-# 실행
-setup_logging
 main
-
-# 정리
-[[ ! -s "$ERR_FILE" ]] && rm -f "$ERR_FILE"
-cleanup
-exec zsh -l

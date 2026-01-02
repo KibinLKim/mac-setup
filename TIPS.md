@@ -50,4 +50,27 @@ git config --global user.email "이메일"
 
 ## Claude Code + VS Code
 - 외부 터미널에서 VS Code diff 연결: claude 실행 후 `/ide` 입력
-- VS Code 확장 `anthropics.claude-code` 자동 설치됨
+- VS Code 확장 `anthropic.claude-code` 자동 설치됨
+
+## 트러블슈팅
+
+### brew 명령어를 찾을 수 없음
+```bash
+# .zprofile에 shellenv 추가 후 쉘 재시작
+eval "$(/opt/homebrew/bin/brew shellenv)"
+```
+
+### 스크립트 실행 중 비밀번호 반복 입력
+- sudo 세션이 만료된 경우 발생
+- 스크립트가 15초마다 자동 갱신하지만, 긴 다운로드 중 만료될 수 있음
+- 비밀번호 입력 후 계속 진행하면 됨
+
+### 설치 실패 항목 재설치
+```bash
+# 개별 재설치
+brew install 패키지명
+brew install --cask 앱명
+
+# 스크립트 재실행 (이미 설치된 항목은 스킵)
+./mac-setup.sh
+```

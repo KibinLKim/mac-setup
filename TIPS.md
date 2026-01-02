@@ -50,3 +50,4 @@ git config --global user.email "이메일"
 
 ## Claude Code + VS Code
 - 외부 터미널에서 VS Code diff 연결: claude 실행 후 `/ide` 입력
+- VS Code 확장 `anthropics.claude-code` 자동 설치됨

@@ -4,6 +4,12 @@
 # Mac 개발 환경 설정 스크립트
 # ============================================
 
+# 로그 파일 설정
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+LOG_FILE="./mac-setup-${TIMESTAMP}.log"
+ERR_FILE="./mac-setup-${TIMESTAMP}.err"
+exec > >(tee -a "$LOG_FILE") 2> >(tee -a "$ERR_FILE" >&2)
+
 # 설정
 CLI_TOOLS=(git gh eza bat ripgrep fzf jq yq lazygit node pnpm uv httpie tldr watch)
 
@@ -34,6 +40,7 @@ VSCODE_EXTENSIONS=(
     eamodio.gitlens
     redhat.vscode-yaml
     ms-vscode-remote.remote-ssh
+    anthropics.claude-code
     haack.warp-companion
 )
 
@@ -48,8 +55,8 @@ cleanup() {
 setup_sudo() {
     echo "🔐 관리자 권한이 필요합니다..."
     sudo -v || { echo "  ✗ sudo 권한 획득 실패"; exit 1; }
-    # sudo 세션 유지 (60초마다 갱신)
-    (while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done) 2>/dev/null &
+    # sudo 세션 유지 (30초마다 갱신)
+    (while true; do sudo -n true; sleep 30; kill -0 "$$" || exit; done) 2>/dev/null &
     SUDO_PID=$!
     # 스크립트 종료 시 백그라운드 프로세스 정리
     trap cleanup EXIT
@@ -61,6 +68,8 @@ print_header() {
     echo "══════════════════════════════════════════"
     echo "  🚀 Mac 개발 환경 설정 스크립트"
     echo "══════════════════════════════════════════"
+    echo "📝 로그: $LOG_FILE"
+    echo "📝 에러: $ERR_FILE"
     echo ""
 }
 
@@ -74,9 +83,9 @@ print_section() {
 install_homebrew() {
     echo "🍺 Homebrew 설치 확인..."
     if ! command -v brew &>/dev/null; then
-        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
         # shellenv를 아키텍처에 맞게 설정
-        if ! grep -q 'brew shellenv' ~/.zshrc; then
+        if [[ ! -f ~/.zshrc ]] || ! grep -q 'brew shellenv' ~/.zshrc; then
             echo "eval \"\$(${HOMEBREW_PREFIX}/bin/brew shellenv)\"" >> ~/.zshrc
         fi
         eval "$("${HOMEBREW_PREFIX}/bin/brew" shellenv)"
@@ -181,6 +190,15 @@ install_vscode_extensions() {
         return
     fi
 
+    # code 명령어 심볼릭 링크 생성
+    if [[ ! -L /usr/local/bin/code ]]; then
+        sudo mkdir -p /usr/local/bin
+        sudo ln -sf "$vscode" /usr/local/bin/code
+        echo "  ✓ code 명령어 설정"
+    else
+        echo "  ✓ code 명령어 (이미 설정됨)"
+    fi
+
     # 설치된 확장 목록 캐시
     local installed_extensions
     installed_extensions=$("$vscode" --list-extensions 2>/dev/null | tr '[:upper:]' '[:lower:]')
@@ -215,7 +233,7 @@ setup_shell() {
     fi
 
     # alias 설정
-    if ! grep -q "# Custom alias" ~/.zshrc; then
+    if [[ ! -f ~/.zshrc ]] || ! grep -q "# Custom alias" ~/.zshrc; then
         cat >> ~/.zshrc << 'EOF'
 
 # Claude Code CLI (native 설치)
@@ -240,11 +258,11 @@ EOF
 # 완료 메시지 출력
 print_footer() {
     echo "══════════════════════════════════════════"
-    echo "✅ 완료! 터미널 재시작하세요."
+    echo "✅ 완료!"
     echo ""
     echo "📋 설치 후 필요한 작업:"
     echo "──────────────────────────────────────────"
-    echo "• VS Code: Cmd+Shift+P → Shell Command: Install"
+    echo "• VS Code: code 명령어 사용 가능"
     echo "• Docker: 앱 실행 → 권한 허용 → 초기 설정"
     echo "• Rectangle: 앱 실행 → 접근성 권한 허용"
     echo "• GitHub CLI: gh auth login"
@@ -271,3 +289,9 @@ main() {
 
 # 스크립트 실행
 main
+
+# 빈 에러 파일 삭제
+[[ ! -s "$ERR_FILE" ]] && rm -f "$ERR_FILE"
+
+# 새 셸로 교체 (현재 셸에 설정 즉시 반영)
+exec zsh -l

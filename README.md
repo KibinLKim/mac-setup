@@ -26,6 +26,7 @@ macOS default development environment setup script
 - ESLint, Prettier
 - Docker, Kubernetes
 - GitLens, YAML, Remote SSH
+- Claude Code
 - Warp Companion (Warp 테마 동기화)
 
 ### 기타
@@ -42,16 +43,20 @@ chmod +x mac-setup.sh
 ./mac-setup.sh
 ```
 
+스크립트 실행 시 로그 파일이 자동 생성됩니다:
+- `mac-setup-날짜시간.log` - 정상 출력
+- `mac-setup-날짜시간.err` - 에러 출력 (에러 없으면 자동 삭제)
+
 ## 설치 후
 
-1. 터미널 재시작
-2. VS Code: `Cmd+Shift+P` → `Shell Command: Install 'code' command in PATH`
-3. Docker: 앱 실행 → 권한 허용 → 초기 설정
-4. Rectangle: 앱 실행 → 접근성 권한 허용
-5. GitHub CLI: `gh auth login`
-6. Git 설정: `git config --global user.name "이름"` / `git config --global user.email "이메일"`
-7. Claude Code: `claude` 실행 → 로그인
-8. Warp: 테마, IDE 설정
+1. Docker: 앱 실행 → 권한 허용 → 초기 설정
+2. Rectangle: 앱 실행 → 접근성 권한 허용
+3. GitHub CLI: `gh auth login`
+4. Git 설정: `git config --global user.name "이름"` / `git config --global user.email "이메일"`
+5. Claude Code: `claude` 실행 → 로그인
+6. Warp: 테마, IDE 설정
+
+> 터미널 재시작과 VS Code `code` 명령어는 자동 설정됩니다.
 
 ## 참고
 

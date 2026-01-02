@@ -37,11 +37,12 @@ macOS default development environment setup script
 
 ## 사용법
 ```bash
-git clone https://github.com/your-username/mac-setup.git
+git clone https://github.com/KibinLKim/mac-setup.git
 cd mac-setup
-chmod +x mac-setup.sh
 ./mac-setup.sh
 ```
+
+> 새 맥에서 `git clone` 실행 시 Xcode Command Line Tools 설치 프롬프트가 뜹니다. 설치 완료 후 다시 실행하세요.
 
 스크립트 실행 시 로그 파일이 자동 생성됩니다:
 - `mac-setup-날짜시간.log` - 정상 출력

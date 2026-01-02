@@ -40,7 +40,7 @@ VSCODE_EXTENSIONS=(
     eamodio.gitlens
     redhat.vscode-yaml
     ms-vscode-remote.remote-ssh
-    anthropics.claude-code
+    anthropic.claude-code
     haack.warp-companion
 )
 
